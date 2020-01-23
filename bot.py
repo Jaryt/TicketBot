@@ -8,13 +8,13 @@ token = ''
 url = ''
 ticketsurl = '' 
 usersurl = '/api/v2/users/show_many.json?ids='
+ticketlink = "/agent/tickets/"
 
 def main(argv):
     global user, token, url, ticketsurl
     user = argv[1]
     token = argv[2]
     url = 'https://' + argv[3] + '.zendesk.com'
-    print(url)
     ticketsurl = '/api/v2/views/' + argv[4] + '/tickets.json'
 
 
@@ -40,12 +40,13 @@ def get_ticket_data(jsondata):
         updated = datetime.strptime(val['updated_at'][:-10], '%Y-%m-%d')
 
         if updated < date:
-            ticket = { 'id': val['id'], 'updated_at': updated }
+            ticket = { 'id': val['id'], 'updated_at': updated, 'agent': None }
 
             if agent not in tickets:
-                if users:
-                    users += ',' 
-                users += str(agent)
+                if agent != None:
+                    if users:
+                        users += ',' 
+                    users += str(agent)
                 tickets[agent] = [ticket]
             else:
                 tickets[agent].append(ticket)
@@ -60,9 +61,40 @@ def set_usernames(jsondata, tickets):
             ticket['agent'] = user['name']
 
 
+def multi(val):
+    return 's' if val != 1 else ''
+
 # Get ticket data and print it out
-def process_tickets():
-    
+def process_tickets(tickets):
+    for agent in tickets.keys():
+        out = ''
+
+        for ticket in tickets[agent]:
+            name = ticket['agent']
+
+            if not out:
+                if name is None:
+                    out = 'Tickets that have no assignee:\n'
+                else:
+                    out = 'Tickets for ' + name + ':\n'
+
+            time_dif = datetime.today() - ticket['updated_at']
+            
+            month_l = 31
+            day = time_dif.days % month_l
+            month = int(time_dif.days / month_l)
+
+            if month > 0:
+                out += str(month) + ' month' + multi(month) + ' '
+
+            if day > 0:
+                if month > 0: 
+                    out += 'and '
+                out += str(day) + ' day' + multi(day) + ' '
+
+            out += 'since we last replied to ' + url + ticketlink + str(ticket['id']) + '\n'
+            
+        print(out)
 
 
 # Run ticket collection and process loop
@@ -71,7 +103,9 @@ def loop():
     users, tickets = get_ticket_data(tickets_json)
     users_json = zendesk_get(usersurl + users)
     set_usernames(users_json, tickets)
-    process_tickets(tickets)
+
+    if tickets:
+        process_tickets(tickets)
 
 main(sys.argv)
 loop()
