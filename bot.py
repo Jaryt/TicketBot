@@ -1,21 +1,20 @@
 #!/usr/bin/python
-
-from datetime import datetime, timedelta
+from datetime import datetime, relativedelta
 import requests, json, sys
+import os
 
 user = ''
-token = ''
+token = os.getenv("ZENDESK_TOKEN")
 url = ''
 ticketsurl = '' 
 usersurl = '/api/v2/users/show_many.json?ids='
 ticketlink = "/agent/tickets/"
 
-def main(argv):
-    global user, token, url, ticketsurl
+def setup(argv):
+    global user, url, ticketsurl
     user = argv[1]
-    token = argv[2]
-    url = 'https://' + argv[3] + '.zendesk.com'
-    ticketsurl = '/api/v2/views/' + argv[4] + '/tickets.json'
+    url = 'https://' + argv[2] + '.zendesk.com'
+    ticketsurl = '/api/v2/views/' + argv[3] + '/tickets.json'
 
 
 # Zendesk request and oauth
@@ -33,14 +32,12 @@ def zendesk_get(api):
 def get_ticket_data(jsondata):
     users = ''
     tickets = {}
-    date = datetime.today() - timedelta(days=7)
 
     for val in jsondata['tickets']:
         agent = val['assignee_id']
-        updated = datetime.strptime(val['updated_at'][:-10], '%Y-%m-%d')
 
         if updated < date:
-            ticket = { 'id': val['id'], 'updated_at': updated, 'agent': None }
+            ticket = { 'id': val['id'], 'updated_at': val['updated_at'], 'agent': None }
 
             if agent not in tickets:
                 if agent != None:
@@ -61,41 +58,41 @@ def set_usernames(jsondata, tickets):
             ticket['agent'] = user['name']
 
 
-def multi(val):
-    return 's' if val != 1 else ''
+def multi(single, val):
+    return single + 's' if val != 1 else single
+
 
 # Get ticket data and print it out
 def process_tickets(tickets):
+    out = ""
     for agent in tickets.keys():
-        out = ''
+        ticket_list = ""
+        header = """Ticket for {name}:
+    {tickets}"""
+        body = '{months} and {days} since we replied to {link}\n'
 
         for ticket in tickets[agent]:
             name = ticket['agent']
 
-            if not out:
-                if name is None:
-                    out = 'Tickets that have no assignee:\n'
-                else:
-                    out = 'Tickets for ' + name + ':\n'
+            if name is None:
+                header = 'Tickets that have no assignee:\n{tickets}'
 
-            time_dif = datetime.today() - ticket['updated_at']
-            
-            month_l = 31
-            day = time_dif.days % month_l
-            month = int(time_dif.days / month_l)
+            updated = datetime.strptime(ticket['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
+            diff = relativedelta.relativedelta(datetime.today(), updated)
+            days = diff.days
+            months = diff.months
 
-            if month > 0:
-                out += str(month) + ' month' + multi(month) + ' '
+            if months > 0:
+                month_str = str(month) + multi(" month", month)
 
-            if day > 0:
-                if month > 0: 
-                    out += 'and '
-                out += str(day) + ' day' + multi(day) + ' '
+            if days > 0:
+                day_str += str(day) + multi(" day", day)
 
-            out += 'since we last replied to ' + url + ticketlink + str(ticket['id']) + '\n'
-            
-        print(out)
+            link = url + ticketlink + str(ticket['id'])
+            ticket_list += body.format(months=month_str, day=dat_str, link=link)
 
+        out += header.format(name=name,tickets=ticket_list)
+    return out
 
 # Run ticket collection and process loop
 def loop():
@@ -105,7 +102,12 @@ def loop():
     set_usernames(users_json, tickets)
 
     if tickets:
-        process_tickets(tickets)
+        result = process_tickets(tickets)
+    else:
+        result = "No tickets found!"
 
-main(sys.argv)
-loop()
+    print(result)
+
+if __name__ == '__main__':
+    setup(sys.argv)
+    loop()
