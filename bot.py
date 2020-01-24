@@ -1,5 +1,6 @@
 #!/usr/bin/python
-from datetime import datetime, relativedelta
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import requests, json, sys
 import os
 
@@ -35,9 +36,11 @@ def get_ticket_data(jsondata):
 
     for val in jsondata['tickets']:
         agent = val['assignee_id']
+        updated = datetime.strptime(val['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
+        diff = relativedelta(datetime.today(), updated)
 
-        if updated < date:
-            ticket = { 'id': val['id'], 'updated_at': val['updated_at'], 'agent': None }
+        if diff.days >= 7 or diff.months > 0:
+            ticket = { 'id': val['id'], 'time_passed': { 'months': diff.months, 'days': diff.days}, 'agent': None }
 
             if agent not in tickets:
                 if agent != None:
@@ -59,39 +62,43 @@ def set_usernames(jsondata, tickets):
 
 
 def multi(single, val):
-    return single + 's' if val != 1 else single
+    return str(val) + (single + 's' if val != 1 else single)
 
 
 # Get ticket data and print it out
 def process_tickets(tickets):
     out = ""
+    
     for agent in tickets.keys():
         ticket_list = ""
-        header = """Ticket for {name}:
-    {tickets}"""
-        body = '{months} and {days} since we replied to {link}\n'
+        header = 'Ticket for {name}:\n{tickets}\n'
+        body = '{months}{days} since we replied to {link}\n'
+        agent_tickets = sorted(tickets[agent], key = lambda item:(item['time_passed']['months'], item['time_passed']['days']), reverse=True)
 
-        for ticket in tickets[agent]:
+        for ticket in agent_tickets:
             name = ticket['agent']
 
             if name is None:
                 header = 'Tickets that have no assignee:\n{tickets}'
 
-            updated = datetime.strptime(ticket['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
-            diff = relativedelta.relativedelta(datetime.today(), updated)
-            days = diff.days
-            months = diff.months
+            days = ticket['time_passed']['days']
+            months = ticket['time_passed']['months']
+            month_str = ""
+            day_str = ""
 
             if months > 0:
-                month_str = str(month) + multi(" month", month)
+                month_str = multi(" month", months)
 
             if days > 0:
-                day_str += str(day) + multi(" day", day)
+                if months > 0:
+                    day_str = " and "
+                day_str += multi(" day", days)
 
             link = url + ticketlink + str(ticket['id'])
-            ticket_list += body.format(months=month_str, day=dat_str, link=link)
+            ticket_list += body.format(months=month_str, days=day_str, link=link)
 
         out += header.format(name=name,tickets=ticket_list)
+
     return out
 
 # Run ticket collection and process loop
