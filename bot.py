@@ -1,22 +1,22 @@
 #!/usr/bin/python
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import grequests, requests, json, sys, os
+import grequests, requests, json, sys, os, parse
 
 user = ''
 token = os.getenv("ZENDESK_TOKEN")
 url = 'https://{domain}.zendesk.com'
-ticketsurl = '/api/v2/views/{view}/tickets.json' 
+viewsurl = '/api/v2/views/{view_id}/tickets.json' 
 usersurl = '/api/v2/users/show_many.json?ids='
-ticketlink = "/agent/tickets/"
+ticketsurl = "/agent/tickets/"
 commentsurl = '/api/v2/tickets/{ticket_id}/comments.json'
 
 
 def setup(argv):
-    global user, url, ticketsurl
+    global user, url, viewsurl
     user = argv[1]
     url = url.format(domain=argv[2])
-    ticketsurl = ticketsurl.format(view=argv[3])
+    viewsurl = viewsurl.format(view_id=argv[3])
 
 
 # Zendesk request and oauth
@@ -36,16 +36,18 @@ def parse_time(date):
 
 # get ticket comments in bunk to find the latest response from an agent
 def get_ticket_replies(tickets):
-    rs = (grequests.get(url + commentsurl.format(ticket_id=ticket['id']), auth=(user + '/token', token)) for ticket in tickets)
+    rs = (grequests.get(url + commentsurl.format(ticket_id=ticket), auth=(user + '/token', token)) for ticket in tickets)
 
     for response in grequests.map(rs):
+        ticket_id = parse.parse(url + commentsurl, response.url)['ticket_id']
+
         comment_data = response.json()
-        updated = datetime.fromtimestamp(0)
+        recent = datetime.fromtimestamp(0)
 
         for comment in comment_data['comments']:
             updated = parse_time(comment['created_at'])
         
-            if comment['author_id'] == agent and updated > recent:
+            if comment['author_id'] == tickets[ticket_id] and updated > recent:
                 recent = updated
 
             diff = relativedelta(datetime.today(), recent)
@@ -56,6 +58,7 @@ def get_ticket_replies(tickets):
 # Getting ticket and user id list from zendesk tickets api endpoint
 def get_ticket_data(json_data):
     users = ''
+    agent_tickets = {}
     tickets = {}
 
     for ticket in json_data['tickets']:
@@ -67,18 +70,20 @@ def get_ticket_data(json_data):
         if diff.days >= 5 or diff.months > 0:
             ticket_data = { 'id': ticket['id'], 'time_passed': { 'months': diff.months, 'days': diff.days }, 'agent': None }
 
-            if agent not in tickets:
+            if agent not in agent_tickets:
                 if agent != None:
                     if users:
                         users += ',' 
                     users += str(agent)
-                tickets[agent] = [ticket_data]
+                agent_tickets[agent] = [ticket_data]
             else:
-                tickets[agent].append(ticket_data)
+                agent_tickets[agent].append(ticket_data)
+
+            tickets[str(ticket['id'])] = agent_tickets[agent]
 
     reply_times = get_ticket_replies(tickets)
 
-    return users, tickets
+    return users, agent_tickets
 
 
 # Setting usernames from zendesk user api endpoint
@@ -118,7 +123,7 @@ def process_ticketlist(tickets):
                 day_str = " and "
             day_str += multi(" day", days)
 
-        link = url + ticketlink + str(ticket['id'])
+        link = url + ticketsurl + str(ticket['id'])
         ticket_list += body.format(months=month_str, days=day_str, link=link)
 
     return ticket_list, name
@@ -136,7 +141,7 @@ def process_tickets(tickets):
 
 # Run ticket collection and process loop
 def loop():
-    tickets_json = zendesk_get(ticketsurl)
+    tickets_json = zendesk_get(viewsurl)
     users, tickets = get_ticket_data(tickets_json)
     users_json = zendesk_get(usersurl + users)
     set_usernames(users_json, tickets)
