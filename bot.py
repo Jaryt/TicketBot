@@ -6,16 +6,17 @@ import os
 
 user = ''
 token = os.getenv("ZENDESK_TOKEN")
-url = ''
-ticketsurl = '' 
+url = 'https://{domain}.zendesk.com'
+ticketsurl = '/api/v2/views/{view}/tickets.json' 
 usersurl = '/api/v2/users/show_many.json?ids='
 ticketlink = "/agent/tickets/"
+commentsurl = '/api/v2/tickets/{ticket_id}/comments.json'
 
 def setup(argv):
     global user, url, ticketsurl
     user = argv[1]
-    url = 'https://' + argv[2] + '.zendesk.com'
-    ticketsurl = '/api/v2/views/' + argv[3] + '/tickets.json'
+    url = url.format(domain=argv[2])
+    ticketsurl = ticketsurl.format(view=argv[3])
 
 
 # Zendesk request and oauth
@@ -28,28 +29,49 @@ def zendesk_get(api):
 
     return response.json()
 
+def parse_time(date):
+    return datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
+
+def get_time_passed(agent, ticket):
+    jsdonata = zendesk_get(commentsurl.format(ticket_id=ticket['id']))
+
+    recent = parse_time(ticket['created_at'])
+
+    for comment in jsdonata['comments']:
+        updated = parse_time(comment['created_at'])
+        if comment['author_id'] == agent and updated > recent:
+            print(updated)
+    
+    diff = relativedelta(datetime.today(), recent)
+
+    return diff
+
 
 # Getting ticket and user id list from zendesk tickets api endpoint
 def get_ticket_data(jsondata):
     users = ''
     tickets = {}
 
-    for val in jsondata['tickets']:
-        agent = val['assignee_id']
-        updated = datetime.strptime(val['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
-        diff = relativedelta(datetime.today(), updated)
+    for ticket in jsondata['tickets']:
+        agent = ticket['assignee_id']
 
-        if diff.days >= 7 or diff.months > 0:
-            ticket = { 'id': val['id'], 'time_passed': { 'months': diff.months, 'days': diff.days}, 'agent': None }
+        if agent != None:
+            diff = get_time_passed(agent, ticket)
+        else:
+            updated = parse_time(ticket['created_at'])
+            diff = relativedelta(datetime.today(), updated)
+
+        if diff.days >= 5 or diff.months > 0:
+            ticket_data = { 'id': ticket['id'], 'time_passed': { 'months': diff.months, 'days': diff.days }, 'agent': None }
 
             if agent not in tickets:
                 if agent != None:
                     if users:
                         users += ',' 
                     users += str(agent)
-                tickets[agent] = [ticket]
+                tickets[agent] = [ticket_data]
             else:
-                tickets[agent].append(ticket)
+                tickets[agent].append(ticket_data)
 
     return users, tickets
 
@@ -65,38 +87,42 @@ def multi(single, val):
     return str(val) + (single + 's' if val != 1 else single)
 
 
+def process_ticketlist(tickets):
+    ticket_list = ""
+    body = '{months}{days} since we replied to {link}\n'
+    tickets.sort(key = lambda item:(item['time_passed']['months'], item['time_passed']['days']), reverse=True)
+
+    for ticket in tickets:
+        name = ticket['agent']
+
+        if name is None:
+            header = 'Tickets that have no assignee:\n{tickets}'
+
+        days = ticket['time_passed']['days']
+        months = ticket['time_passed']['months']
+        month_str = ""
+        day_str = ""
+
+        if months > 0:
+            month_str = multi(" month", months)
+
+        if days > 0:
+            if months > 0:
+                day_str = " and "
+            day_str += multi(" day", days)
+
+        link = url + ticketlink + str(ticket['id'])
+        ticket_list += body.format(months=month_str, days=day_str, link=link)
+
+    return ticket_list, name
+
 # Get ticket data and print it out
 def process_tickets(tickets):
     out = ""
     
     for agent in tickets.keys():
-        ticket_list = ""
         header = 'Ticket for {name}:\n{tickets}\n'
-        body = '{months}{days} since we replied to {link}\n'
-        agent_tickets = sorted(tickets[agent], key = lambda item:(item['time_passed']['months'], item['time_passed']['days']), reverse=True)
-
-        for ticket in agent_tickets:
-            name = ticket['agent']
-
-            if name is None:
-                header = 'Tickets that have no assignee:\n{tickets}'
-
-            days = ticket['time_passed']['days']
-            months = ticket['time_passed']['months']
-            month_str = ""
-            day_str = ""
-
-            if months > 0:
-                month_str = multi(" month", months)
-
-            if days > 0:
-                if months > 0:
-                    day_str = " and "
-                day_str += multi(" day", days)
-
-            link = url + ticketlink + str(ticket['id'])
-            ticket_list += body.format(months=month_str, days=day_str, link=link)
-
+        ticket_list, name = process_ticketlist(tickets[agent])
         out += header.format(name=name,tickets=ticket_list)
 
     return out
