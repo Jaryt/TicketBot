@@ -1,7 +1,9 @@
 #!/usr/bin/python
+
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import grequests, requests, json, sys, os, parse
+
 
 user = ''
 token = os.getenv("ZENDESK_TOKEN")
@@ -10,7 +12,7 @@ viewsurl = '/api/v2/views/{view_id}/tickets.json'
 usersurl = '/api/v2/users/show_many.json?ids='
 ticketsurl = "/agent/tickets/"
 commentsurl = '/api/v2/tickets/{ticket_id}/comments.json'
-
+max_days = 5
 
 def setup(argv):
     global user, url, viewsurl
@@ -34,23 +36,30 @@ def parse_time(date):
     return datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
 
 
-# get ticket comments in bunk to find the latest response from an agent
+# get ticket comments in bulk to find the latest response from an agent
 def get_ticket_replies(tickets):
     rs = (grequests.get(url + commentsurl.format(ticket_id=ticket), auth=(user + '/token', token)) for ticket in tickets)
 
     for response in grequests.map(rs):
         ticket_id = parse.parse(url + commentsurl, response.url)['ticket_id']
+        ticket = tickets[ticket_id]
 
         comment_data = response.json()
-        recent = datetime.fromtimestamp(0)
+        recent = ticket['created_at']
+        assignee_replied = False
 
         for comment in comment_data['comments']:
             updated = parse_time(comment['created_at'])
-        
-            if comment['author_id'] == tickets[ticket_id] and updated > recent:
-                recent = updated
 
-            diff = relativedelta(datetime.today(), recent)
+            if comment['author_id'] == ticket['assignee_id'] and comment['public']:
+                assignee_replied = True
+                if updated > recent:
+                    recent = updated
+
+        diff = relativedelta(datetime.today(), recent)
+
+        if diff.days < max_days and diff.months == 0:
+            ticket['data']['time_passed'] = { 'months': diff.months, 'days': diff.days }
 
     return diff
 
@@ -60,6 +69,7 @@ def get_ticket_data(json_data):
     users = ''
     agent_tickets = {}
     tickets = {}
+    nonequeue = []
 
     for ticket in json_data['tickets']:
         agent = ticket['assignee_id']
@@ -67,7 +77,7 @@ def get_ticket_data(json_data):
         created = parse_time(ticket['created_at'])
         diff = relativedelta(datetime.today(), created)
 
-        if diff.days >= 5 or diff.months > 0:
+        if diff.days >= max_days or diff.months > 0:
             ticket_data = { 'id': ticket['id'], 'time_passed': { 'months': diff.months, 'days': diff.days }, 'agent': None }
 
             if agent not in agent_tickets:
@@ -75,12 +85,13 @@ def get_ticket_data(json_data):
                     if users:
                         users += ',' 
                     users += str(agent)
+                
                 agent_tickets[agent] = [ticket_data]
             else:
                 agent_tickets[agent].append(ticket_data)
 
-            tickets[str(ticket['id'])] = agent_tickets[agent]
-
+            tickets[str(ticket['id'])] = { 'assignee_id': agent, 'created_at': created, 'data': ticket_data }
+   
     reply_times = get_ticket_replies(tickets)
 
     return users, agent_tickets
@@ -105,11 +116,8 @@ def process_ticketlist(tickets):
     tickets.sort(key = lambda item:(item['time_passed']['months'], item['time_passed']['days']), reverse=True)
 
     for ticket in tickets:
+        ticket_id = ticket['id']
         name = ticket['agent']
-
-        if name is None:
-            header = 'Tickets that have no assignee:\n{tickets}'
-
         days = ticket['time_passed']['days']
         months = ticket['time_passed']['months']
         month_str = ""
@@ -123,7 +131,7 @@ def process_ticketlist(tickets):
                 day_str = " and "
             day_str += multi(" day", days)
 
-        link = url + ticketsurl + str(ticket['id'])
+        link = url + ticketsurl + str(ticket_id)
         ticket_list += body.format(months=month_str, days=day_str, link=link)
 
     return ticket_list, name
@@ -133,7 +141,11 @@ def process_tickets(tickets):
     out = ""
     
     for agent in tickets.keys():
-        header = 'Ticket for {name}:\n{tickets}\n'
+        if agent is None:
+            header = 'Tickets that have no assignee:\n{tickets}'
+        else:
+            header = 'Ticket for {name}:\n{tickets}\n'
+
         ticket_list, name = process_ticketlist(tickets[agent])
         out += header.format(name=name,tickets=ticket_list)
 
