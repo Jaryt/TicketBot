@@ -32,7 +32,7 @@ def multi(single, val):
 
 
 # process output for an agent's list of tickets
-def process_ticket_list(agent, tickets):
+def process_ticket_list(tickets):
     ticket_list = ""
     body = '{months}{days} since we replied to {link}\n'
 
@@ -67,13 +67,13 @@ def process_tickets(agent_tickets, agents):
         else:
             header = 'Ticket for {name}:\n{tickets}\n'
 
-        ticket_list = process_ticket_list(agent, agent_tickets[agent])
+        ticket_list = process_ticket_list(agent_tickets[agent])
         out += header.format(name=agents[agent]['name'], tickets=ticket_list)
 
     return out
 
 
-def get_agent_tickets(tickets, users):
+def get_agent_tickets(tickets):
     agent_tickets = {}
 
     for ticket_id in tickets:
@@ -110,7 +110,7 @@ def loop():
     tickets = zd.get_tickets()
     users = zd.get_users()
 
-    agent_tickets = get_agent_tickets(tickets, users)
+    agent_tickets = get_agent_tickets(tickets)
 
     if tickets:
         result = process_tickets(agent_tickets, users['agents'])
