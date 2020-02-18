@@ -2,28 +2,26 @@
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import grequests
-import requests
-import json
-import sys
-import os
-import parse
+import grequests, requests, json, sys, os, parse
 import zendesk as zd
+import slackhandler as slack
 
 
 user = ''
 domain = ''
 view = ''
+channel = ''
 max_days = 5
 
 tickets_url = "/agent/tickets/"
 
 def setup(argv):
-    global user, domain, view
+    global user, domain, view, channel
 
     user = argv[1]
     domain = argv[2]
     view = argv[3]
+    channel = argv[4]
 
 
 # grammatical function
@@ -58,17 +56,25 @@ def process_ticket_list(tickets):
 
 
 # Get ticket data and print it out
-def process_tickets(agent_tickets, agents):
+def process_tickets(agent_tickets, agents, emails):
     out = ""
 
-    for agent in agent_tickets:
-        if agent == 'None':
-            header = 'Tickets that have no assignee:\n{tickets}'
+    for agent_id in agent_tickets:
+        if agent_id == 'None':
+            header = 'Tickets that have no assignee:\n{tickets}\n'
         else:
-            header = 'Ticket for {name}:\n{tickets}\n'
+            header = 'Tickets for {name}:\n{tickets}\n'
 
-        ticket_list = process_ticket_list(agent_tickets[agent])
-        out += header.format(name=agents[agent]['name'], tickets=ticket_list)
+        ticket_list = process_ticket_list(agent_tickets[agent_id])
+        agent = agents[agent_id]
+        name = agent['name']
+
+        if 'email' in agent:
+            email = agent['email']
+            if email in emails and emails[email] != None:
+                name = '@' + emails[email]
+
+        out += header.format(name=name, tickets=ticket_list)
 
     return out
 
@@ -99,6 +105,19 @@ def get_agent_tickets(tickets):
     return agent_tickets
 
 
+def get_emails(users):
+    emails = {}
+    agents = users['agents']
+
+    for user_id in agents:
+        user = agents[user_id]
+        email = user['email']
+
+        if 'email' in user and email != None:
+            emails[email.lower()] = None
+
+    return emails
+
 # Run ticket collection and process loop
 def loop():
     zd.set_credentials(user, domain)
@@ -110,14 +129,19 @@ def loop():
     tickets = zd.get_tickets()
     users = zd.get_users()
 
+    slack.join()
+    slack.set_channel(channel)
+
+    emails = slack.lookup_emails(get_emails(users))
+
     agent_tickets = get_agent_tickets(tickets)
 
     if tickets:
-        result = process_tickets(agent_tickets, users['agents'])
+        result = process_tickets(agent_tickets, users['agents'], emails)
     else:
         result = "No tickets found!"
 
-    print(result)
+    slack.send_message(result)
 
 
 if __name__ == '__main__':

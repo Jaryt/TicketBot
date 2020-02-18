@@ -3,14 +3,19 @@
 from datetime import datetime
 import grequests, requests, json, sys, os, parse
 
+# Zendesk Keys
 user = ''
 token = os.getenv("ZENDESK_TOKEN")
 url = 'https://{domain}.zendesk.com'
 views_hook = '/api/v2/views/{view_id}/tickets.json'
 comments_hook = '/api/v2/tickets/{ticket_id}/comments.json' 
 users_hook = '/api/v2/users/show_many.json?ids={users}'
+policies_hook = '/api/v2/slas/policies'
+
+# Zendesk data
 tickets = {}
 users = { 'end_users': {}, 'agents': {}, 'unknown': {} }
+sla_policies = {}
 
 
 # Set zendesk username and domain
@@ -25,7 +30,7 @@ def zendesk_get(api):
     response = requests.get(url + api, auth=(user + '/token', token))
 
     if response.status_code != 200:
-        print('Status:', response.status_code, 'Problem with the request. Exiting.')
+        print('Status:', response.status_code, 'Problem with the', api, 'request. Exiting.')
         exit()
 
     return response.json()
@@ -112,7 +117,8 @@ def load_ticket_replies():
 
 def load_user_data():
     cs = ','
-    users_cs = cs.join(users['agents']).strip('None') + cs.join(users['unknown'])
+
+    users_cs = cs.join(users['agents']).strip('None') + ',' + cs.join(users['unknown'])
     user_json = zendesk_get(users_hook.format(users=users_cs))
 
     for user in user_json['users']:
@@ -156,8 +162,20 @@ def load_last_replies():
                     else:
                         last[user_type] = { 'author_id': commenter, 'comment': commenter_last }
 
+
+# Start of SLA loading, 
+def load_sla_policies():
+    sla_json = zendesk_get(policies_hook)
+
+
+def load_ticket_sla():
+    if not sla_policies:
+        load_sla_policies()
+
+
 def get_tickets():
     return tickets
+
 
 def get_users():
     return users
