@@ -1,0 +1,32 @@
+version 2.1
+
+orbs:
+    python: circleci/python@0.2.1
+
+jobs:
+    build:
+        executor: python/3.8.1
+        steps:
+            - checkout
+            - python/load-cache
+            - python/install-deps
+            - python/save-cache
+            - run: 
+                # command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL
+                command: echo 'hello!'
+                name: "Check support team tickets"
+workflows:
+    version: 2
+    commit:
+        jobs:
+            - build
+    daily:
+        triggers:
+            - schedule:
+                cron: "0 9 * * *"
+                filters:
+                    branches:
+                    only:
+                        - master
+        jobs: 
+            - build
