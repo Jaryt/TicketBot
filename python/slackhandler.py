@@ -67,7 +67,6 @@ def add_users(users_json, emails):
 
             if email in emails:
                 emails[email] = user['name']
-                print(user['name'])
 
 
 # Takes a dict of emails and sets their values to the slack username

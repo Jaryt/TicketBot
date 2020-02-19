@@ -16,9 +16,6 @@ jobs:
                 name: "Check Support Team Tickets"
 workflows:
     version: 2
-    commit:
-        jobs:
-            - build
     daily:
         triggers:
             - schedule:
