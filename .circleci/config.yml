@@ -1,11 +1,11 @@
-version 2.1
+version: 2.1
 
 orbs:
     python: circleci/python@0.2.1
 
 jobs:
     build:
-        executor: python/3.8.1
+        executor: python/default
         steps:
             - checkout
             - python/load-cache
@@ -26,7 +26,7 @@ workflows:
                 cron: "0 9 * * *"
                 filters:
                     branches:
-                    only:
-                        - master
+                        only:
+                            - master
         jobs: 
             - build
