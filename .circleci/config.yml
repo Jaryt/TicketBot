@@ -12,9 +12,8 @@ jobs:
             - python/install-deps
             - python/save-cache
             - run: 
-                # command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL
-                command: echo 'hello!'
-                name: "Check support team tickets"
+                command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL
+                name: "Check Support Team Tickets"
 workflows:
     version: 2
     commit:
