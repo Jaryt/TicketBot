@@ -1,5 +1,6 @@
 import os
-import json, requests
+import json
+import requests
 import slack
 import certifi
 import ssl
@@ -12,14 +13,17 @@ users_key = 'users.list'
 client = None
 channel_id = ''
 
+
 def slack_get(api, after):
     response = requests.get(slack_url + api + '?token=' + token + after)
 
     if response.status_code != 200:
-        print('Status:', response.status_code, 'Problem with the', api, 'request. Exiting.')
+        print('Status:', response.status_code,
+              'Problem with the', api, 'request. Exiting.')
         exit()
 
     return response.json()
+
 
 def get_paged(api, func, params):
     cursor = ''
@@ -45,7 +49,7 @@ def check_channels(response_json, channel_name):
     for channel in response_json['channels']:
         if channel['name'] == channel_name:
             channel_id = channel['id']
-            
+
             return True
 
     return False
@@ -59,14 +63,14 @@ def add_users(users_json, emails):
     for user in users_json['members']:
         profile = user['profile']
 
-        if 'email' in profile:
+        if 'email' in profile and profile['email'] != None:
             email = profile['email']
 
-            if email != None:
-                email = email.lower()
-
             if email in emails:
-                emails[email] = user['name']
+                emails[email] = {'name': user['name']}
+
+                if 'tz_offset' in user:
+                    emails[email]['tz_offset'] = user['tz_offset']
 
 
 # Takes a dict of emails and sets their values to the slack username

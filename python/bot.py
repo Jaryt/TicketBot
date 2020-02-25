@@ -1,8 +1,13 @@
 #!/usr/bin/python
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-import grequests, requests, json, sys, os, parse
+import grequests
+import requests
+import json
+import sys
+import os
+import parse
 import zendesk as zd
 import slackhandler as slack
 
@@ -11,9 +16,11 @@ user = ''
 domain = ''
 view = ''
 channel = ''
-max_days = 5
+min_days = 5  # Min days since we reply to trigger log
+default_offset = -28800  # PST offset in seconds from UTC
 
 tickets_url = "/agent/tickets/"
+
 
 def setup(argv):
     global user, domain, view, channel
@@ -55,8 +62,14 @@ def process_ticket_list(tickets):
     return ticket_list
 
 
+def check_timezone(tz_offset):
+    time = datetime.utcnow() + timedelta(seconds=tz_offset)
+
+    return time.hour >= 11 and time.hour < 14
+
+
 # Get ticket data and print it out
-def process_tickets(agent_tickets, agents, emails):
+def process_tickets(agent_tickets, agents, extra_data):
     out = ""
 
     for agent_id in agent_tickets:
@@ -68,13 +81,20 @@ def process_tickets(agent_tickets, agents, emails):
         ticket_list = process_ticket_list(agent_tickets[agent_id])
         agent = agents[agent_id]
         name = agent['name']
+        tz_offset = default_offset
 
         if 'email' in agent:
             email = agent['email']
-            if email in emails and emails[email] != None:
-                name = '@' + emails[email]
 
-        out += header.format(name=name, tickets=ticket_list)
+            if email in extra_data and extra_data[email]:
+                data = extra_data[email]
+                name = '@' + data['name']
+
+                if 'tz_offset' in data:
+                    tz_offset = data['tz_offset']
+
+        if check_timezone(tz_offset):
+            out += header.format(name=name, tickets=ticket_list)
 
     return out
 
@@ -94,13 +114,13 @@ def get_agent_tickets(tickets):
 
             diff = relativedelta(datetime.today(), created_at)
 
-            if diff.days >= max_days or diff.months != 0:
-                delta =  { 'days': diff.days, 'months': diff.months }
+            if diff.days >= min_days or diff.months != 0:
+                delta = {'days': diff.days, 'months': diff.months}
 
                 if assignee_id in agent_tickets:
                     agent_tickets[assignee_id][ticket_id] = delta
                 else:
-                    agent_tickets[assignee_id] = { ticket_id: delta }
+                    agent_tickets[assignee_id] = {ticket_id: delta}
 
     return agent_tickets
 
@@ -118,6 +138,7 @@ def get_emails(users):
 
     return emails
 
+
 # Run ticket collection and process loop
 def loop():
     zd.set_credentials(user, domain)
@@ -132,14 +153,14 @@ def loop():
     slack.join()
     slack.set_channel(channel)
 
-    emails = slack.lookup_emails(get_emails(users))
-
+    extra_data = slack.lookup_emails(get_emails(users))
     agent_tickets = get_agent_tickets(tickets)
 
     if tickets:
-        result = process_tickets(agent_tickets, users['agents'], emails)
-    else:
-        result = "No tickets found!"
+        result = process_tickets(agent_tickets, users['agents'], extra_data)
+        
+    if not tickets or not result:
+        result = "No old tickets found for this loop!"
 
     slack.send_message(result)
 
