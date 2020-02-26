@@ -12,14 +12,14 @@ jobs:
             - python/install-deps
             - python/save-cache
             - run: 
-                command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL
+                command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL true true
                 name: "Check Support Team Tickets"
 workflows:
     version: 2
     daily:
         triggers:
             - schedule:
-                cron: "0 1,4,7,10,13,16,19,22 * * *"
+                cron: "0 0,3,6,9,12,15,18,21 * * *"
                 filters:
                     branches:
                         only:
