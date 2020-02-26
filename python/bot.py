@@ -18,17 +18,24 @@ view = ''
 channel = ''
 min_days = 5  # Min days since we reply to trigger log
 default_offset = -28800  # PST offset in seconds from UTC
+check_tz = False
+ping = True
+weekday = False
 
 tickets_url = "/agent/tickets/"
 
 
 def setup(argv):
     global user, domain, view, channel
+    global check_tz, ping, weekday
 
     user = argv[1]
     domain = argv[2]
     view = argv[3]
     channel = argv[4]
+    check_tz = argv[5].lower() == 'true'
+    ping = argv[6].lower() == 'true'
+    weekday = datetime.now().weekday() < 5
 
 
 # grammatical function
@@ -65,7 +72,7 @@ def process_ticket_list(tickets):
 def check_timezone(tz_offset):
     time = datetime.utcnow() + timedelta(seconds=tz_offset)
 
-    return time.hour >= 11 and time.hour < 14
+    return time.hour >= 9 and time.hour < 12
 
 
 # Get ticket data and print it out
@@ -88,12 +95,14 @@ def process_tickets(agent_tickets, agents, extra_data):
 
             if email in extra_data and extra_data[email]:
                 data = extra_data[email]
-                name = '@' + data['name']
+
+                if weekday and ping:
+                    name = '@' + data['name']
 
                 if 'tz_offset' in data:
                     tz_offset = data['tz_offset']
 
-        if check_timezone(tz_offset):
+        if check_timezone(tz_offset) or not check_tz:
             out += header.format(name=name, tickets=ticket_list)
 
     return out
@@ -158,7 +167,7 @@ def loop():
 
     if tickets:
         result = process_tickets(agent_tickets, users['agents'], extra_data)
-        
+
     if not tickets or not result:
         result = "No old tickets found for this loop!"
 
