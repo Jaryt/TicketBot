@@ -46,7 +46,7 @@ def multi(single, val):
 # process output for an agent's list of tickets
 def process_ticket_list(tickets):
     ticket_list = ""
-    body = '{months}{days} since we replied to {link}\n'
+    body = '{months}{days} since we replied to `{link}`\n'
 
     for ticket_id in tickets:
         ticket = tickets[ticket_id]
