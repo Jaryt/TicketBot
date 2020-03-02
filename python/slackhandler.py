@@ -64,7 +64,7 @@ def add_users(users_json, emails):
         profile = user['profile']
 
         if 'email' in profile and profile['email'] != None:
-            email = profile['email']
+            email = profile['email'].lower()
 
             if email in emails:
                 emails[email] = {'name': user['name']}
