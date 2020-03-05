@@ -201,10 +201,8 @@ def loop():
         f.write(json.dumps(agent_tickets, indent=4, default=str))
         f.close()
 
-    if not tickets or not result:
-        result = "No old tickets found for this loop!"
-
-    slack.send_message(result)
+    if tickets and result:
+        slack.send_message(result)
 
 
 if __name__ == '__main__':
