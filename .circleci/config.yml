@@ -33,7 +33,7 @@ jobs:
         steps:
           - checkout
           - aws-s3/copy:
-              from: 's3://circleticketbot'
+              from: 's3://circleticketbot/store.json'
               to: ../store.json
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"

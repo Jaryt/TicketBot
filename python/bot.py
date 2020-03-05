@@ -204,7 +204,7 @@ def loop():
     if not tickets or not result:
         result = "No old tickets found for this loop!"
 
-    slack.send_message(result)
+    slack.send_message(len(result))
 
 
 if __name__ == '__main__':
