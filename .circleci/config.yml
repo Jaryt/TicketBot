@@ -18,7 +18,7 @@ commands:
           - python/install-deps
           - python/save-cache
           - run: 
-              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL false false << parameters.layover >>
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL true true << parameters.layover >>
               name: "Run Ticket Collection"
     
 jobs:
@@ -53,10 +53,6 @@ workflows:
                         only:
                           - master
         jobs: 
-          - support
-          - cse
-    commit:
-        jobs:
           - support
           - cse
 
