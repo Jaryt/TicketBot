@@ -18,7 +18,7 @@ commands:
           - python/install-deps
           - python/save-cache
           - run: 
-              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL true true << parameters.layover >>
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL false false << parameters.layover >>
               name: "Run Ticket Collection"
     
 jobs:
@@ -34,12 +34,12 @@ jobs:
           - checkout
           - aws-s3/copy:
               from: 's3://circleticketbot'
-              to: store.json
+              to: ../store.json
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"
               layover: 5
           - aws-s3/copy:
-              from: store.json
+              from: ../store.json
               to: 's3://circleticketbot'
 
 workflows:
