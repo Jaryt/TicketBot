@@ -1,12 +1,12 @@
 # Zendesk Support v2 API Python Wrapper
 
-from datetime import datetime
 import grequests
 import requests
 import json
 import sys
 import os
 import parse
+import util
 
 # Zendesk Keys
 user = ''
@@ -51,7 +51,7 @@ def parse_tickets(tickets_json):
     for ticket in tickets_json['tickets']:
         assignee_id = str(ticket['assignee_id'])
         ticket_id = str(ticket['id'])
-        created_at = parse_time(ticket['created_at'])
+        created_at = util.parse_time(ticket['created_at'])
         tickets[ticket_id] = {'assignee_id': assignee_id, 'created_at': created_at, 'comments': {
             'public': {}, 'private': {}}}
         agents = users['agents']
@@ -68,11 +68,6 @@ def load_tickets_view(view_id):
     parse_tickets(zendesk_get(views_hook.format(view_id=view_id)))
 
 
-# Parse zendesk's date format
-def parse_time(date):
-    return datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
-
-
 # Get replies from all tickets
 def load_ticket_replies():
     rs = (grequests.get(url + comments_hook.format(ticket_id=ticket),
@@ -87,7 +82,7 @@ def load_ticket_replies():
             author_id = str(comment['author_id'])
             is_public = 'public' if comment['public'] else 'private'
             ticket_vis = ticket['comments'][is_public]
-            created_at = parse_time(comment['created_at'])
+            created_at = util.parse_time(comment['created_at'])
             comment_data = {'created_at': created_at, 'body': comment['body']}
             agents = users['agents']
             unknown_users = users['unknown']

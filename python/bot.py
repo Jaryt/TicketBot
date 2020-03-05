@@ -10,6 +10,7 @@ import os
 import parse
 import zendesk as zd
 import slackhandler as slack
+import util
 
 
 user = ''
@@ -20,14 +21,18 @@ min_days = 5  # Min days since we reply to trigger log
 default_offset = -28800  # PST offset in seconds from UTC
 check_tz = False
 ping = True
+layover_days = 0
 weekday = False
+today = None
 
 tickets_url = "/agent/tickets/"
+store_loc = "../store.json"
 
 
 def setup(argv):
     global user, domain, view, channel
-    global check_tz, ping, weekday
+    global check_tz, ping, layover_days
+    global today, weekday
 
     user = argv[1]
     domain = argv[2]
@@ -35,6 +40,8 @@ def setup(argv):
     channel = argv[4]
     check_tz = argv[5].lower() == 'true'
     ping = argv[6].lower() == 'true'
+    layover_days = int(argv[7])
+    today = datetime.today()
     weekday = datetime.now().weekday() < 5
 
 
@@ -50,8 +57,18 @@ def process_ticket_list(tickets):
 
     for ticket_id in tickets:
         ticket = tickets[ticket_id]
-        days = ticket['days']
-        months = ticket['months']
+
+        if layover_days > 0 and 'last_notify' in ticket:
+            last_notify = util.parse_time(ticket['last_notify'])
+            diff = relativedelta(today, last_notify)
+
+            if diff.days < layover_days and diff.months == 0:
+                continue
+
+        ticket['last_notify'] = util.to_string(today)
+
+        days = ticket['delta']['days']
+        months = ticket['delta']['months']
         month_str = ""
         day_str = ""
 
@@ -85,7 +102,6 @@ def process_tickets(agent_tickets, agents, extra_data):
         else:
             header = 'Tickets for {name}:\n{tickets}\n'
 
-        ticket_list = process_ticket_list(agent_tickets[agent_id])
         agent = agents[agent_id]
         name = agent['name']
         tz_offset = default_offset
@@ -103,13 +119,21 @@ def process_tickets(agent_tickets, agents, extra_data):
                     tz_offset = data['tz_offset']
 
         if check_timezone(tz_offset) or not check_tz:
-            out += header.format(name=name, tickets=ticket_list)
+            ticket_list = process_ticket_list(agent_tickets[agent_id])
+
+            if ticket_list:
+                out += header.format(name=name, tickets=ticket_list)
 
     return out
 
 
 def get_agent_tickets(tickets):
-    agent_tickets = {}
+    try:
+        with open(store_loc) as f:
+            agent_tickets = json.load(f)
+            f.close()
+    except IOError:
+        agent_tickets = {}
 
     for ticket_id in tickets:
         ticket = tickets[ticket_id]
@@ -121,15 +145,20 @@ def get_agent_tickets(tickets):
             last_reply = last_replies['agents']
             created_at = last_reply['comment']['created_at']
 
-            diff = relativedelta(datetime.today(), created_at)
+            diff = relativedelta(today, created_at)
 
-            if diff.days >= min_days or diff.months != 0:
+            if diff.days >= min_days or diff.months > 0:
                 delta = {'days': diff.days, 'months': diff.months}
 
                 if assignee_id in agent_tickets:
-                    agent_tickets[assignee_id][ticket_id] = delta
+                    agent = agent_tickets[assignee_id]
+
+                    if ticket_id in agent:
+                        agent[ticket_id]['delta'] = delta
+                    else:
+                        agent[ticket_id] = {'delta': delta}
                 else:
-                    agent_tickets[assignee_id] = {ticket_id: delta}
+                    agent_tickets[assignee_id] = {ticket_id: {'delta': delta}}
 
     return agent_tickets
 
@@ -167,6 +196,10 @@ def loop():
 
     if tickets:
         result = process_tickets(agent_tickets, users['agents'], extra_data)
+
+    with open(store_loc, 'w+') as f:
+        f.write(json.dumps(agent_tickets, indent=4, default=str))
+        f.close()
 
     if not tickets or not result:
         result = "No old tickets found for this loop!"

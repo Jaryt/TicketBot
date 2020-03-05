@@ -2,18 +2,46 @@ version: 2.1
 
 orbs:
     python: circleci/python@0.2.1
+    aws-s3: circleci/aws-s3@1.0.15
 
+commands:
+    collect-tickets:
+        description: "A very simple command for demonstration purposes"
+        parameters:
+          view:
+            type: string
+          layover:
+            type: integer
+            default: 0
+        steps:
+          - python/load-cache
+          - python/install-deps
+          - python/save-cache
+          - run: 
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL true true << parameters.layover >>
+              name: "Run Ticket Collection"
+    
 jobs:
-    build:
+    support:
         executor: python/default
         steps:
-            - checkout
-            - python/load-cache
-            - python/install-deps
-            - python/save-cache
-            - run: 
-                command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL $VIEW_ID_CLOUD $SLACK_CHANNEL true true
-                name: "Check Support Team Tickets"
+          - checkout
+          - collect-tickets:
+                view: "$VIEW_ID_CLOUD"
+    cse:
+        executor: python/default
+        steps:
+          - checkout
+          - aws-s3/copy:
+              from: 's3://circleticketbot'
+              to: store.json
+          - collect-tickets:
+              view: "$VIEW_ID_PREMIUM"
+              layover: 5
+          - aws-s3/copy:
+              from: store.json
+              to: 's3://circleticketbot'
+
 workflows:
     version: 2
     daily:
@@ -23,6 +51,12 @@ workflows:
                 filters:
                     branches:
                         only:
-                            - master
+                          - master
         jobs: 
-            - build
+          - support
+          - cse
+    commit:
+        jobs:
+          - support
+          - cse
+
