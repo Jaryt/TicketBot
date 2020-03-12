@@ -217,8 +217,7 @@ def loop():
         f.close()
 
     if tickets and result:
-        print(result)
-        # slack.send_message(result)
+        slack.send_message(result)
 
 
 if __name__ == '__main__':
