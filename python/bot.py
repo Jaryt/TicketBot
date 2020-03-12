@@ -130,10 +130,12 @@ def process_tickets(agent_tickets, agents, extra_data):
 def get_agent_tickets(tickets):
     try:
         with open(store_loc) as f:
-            agent_tickets = json.load(f)
+            stored_agents = json.load(f)
             f.close()
     except IOError:
-        agent_tickets = {}
+        print("store.json not found")
+
+    agent_tickets = {}
 
     for ticket_id in tickets:
         ticket = tickets[ticket_id]
@@ -159,6 +161,19 @@ def get_agent_tickets(tickets):
                         agent[ticket_id] = {'delta': delta}
                 else:
                     agent_tickets[assignee_id] = {ticket_id: {'delta': delta}}
+
+    for stored_agent_id in stored_agents:
+        stored_agent = stored_agents[stored_agent_id]
+
+        if stored_agent_id in agent_tickets:
+            agent = agent_tickets[stored_agent_id]
+
+            for stored_ticket_id in stored_agent:
+                stored_ticket = stored_agent[stored_ticket_id]
+                
+                if 'last_notify' in stored_ticket and stored_ticket_id in agent:
+                    ticket = agent[stored_ticket_id]
+                    ticket['last_notify'] = stored_ticket['last_notify']
 
     return agent_tickets
 
@@ -202,7 +217,8 @@ def loop():
         f.close()
 
     if tickets and result:
-        slack.send_message(result)
+        print(result)
+        # slack.send_message(result)
 
 
 if __name__ == '__main__':
