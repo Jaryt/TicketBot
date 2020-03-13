@@ -133,7 +133,7 @@ def get_agent_tickets(tickets):
             stored_agents = json.load(f)
             f.close()
     except IOError:
-        print("store.json not found")
+        stored_agents = None
 
     agent_tickets = {}
 
@@ -162,18 +162,19 @@ def get_agent_tickets(tickets):
                 else:
                     agent_tickets[assignee_id] = {ticket_id: {'delta': delta}}
 
-    for stored_agent_id in stored_agents:
-        stored_agent = stored_agents[stored_agent_id]
+    if stored_agents:
+        for stored_agent_id in stored_agents:
+            stored_agent = stored_agents[stored_agent_id]
 
-        if stored_agent_id in agent_tickets:
-            agent = agent_tickets[stored_agent_id]
+            if stored_agent_id in agent_tickets:
+                agent = agent_tickets[stored_agent_id]
 
-            for stored_ticket_id in stored_agent:
-                stored_ticket = stored_agent[stored_ticket_id]
-                
-                if 'last_notify' in stored_ticket and stored_ticket_id in agent:
-                    ticket = agent[stored_ticket_id]
-                    ticket['last_notify'] = stored_ticket['last_notify']
+                for stored_ticket_id in stored_agent:
+                    stored_ticket = stored_agent[stored_ticket_id]
+                    
+                    if 'last_notify' in stored_ticket and stored_ticket_id in agent:
+                        ticket = agent[stored_ticket_id]
+                        ticket['last_notify'] = stored_ticket['last_notify']
 
     return agent_tickets
 
