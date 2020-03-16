@@ -10,6 +10,12 @@ commands:
         parameters:
           view:
             type: string
+          timezone:
+            type: boolean
+            default: true
+          ping:
+            type: boolean
+            default: true
           layover:
             type: integer
             default: 0
@@ -18,10 +24,18 @@ commands:
           - python/install-deps
           - python/save-cache
           - run: 
-              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL true true << parameters.layover >>
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL << parameters.timezone >> << parameters.ping >> << parameters.layover >>
               name: "Run Ticket Collection"
     
 jobs:
+    all:
+        executor: python/default
+        steps:
+          - checkout
+          - collect-tickets:
+                view: "$VIEW_ID_CLOUD"
+                ping: false
+                timezone: false
     support:
         executor: python/default
         steps:
@@ -44,6 +58,10 @@ jobs:
 
 workflows:
     version: 2
+
+    commit: 
+        jobs:
+          - all
     daily:
         triggers:
             - schedule:
@@ -55,4 +73,3 @@ workflows:
         jobs: 
           - support
           - cse
-
