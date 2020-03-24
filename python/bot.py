@@ -54,6 +54,7 @@ def multi(single, val):
 def process_ticket_list(tickets):
     ticket_list = ""
     body = '{months}{days} since we replied to `{link}`\n'
+    surpressed = 0
 
     for ticket_id in tickets:
         ticket = tickets[ticket_id]
@@ -63,6 +64,7 @@ def process_ticket_list(tickets):
             diff = relativedelta(today, last_notify)
 
             if diff.days < layover_days and diff.months == 0:
+                surpressed += 1
                 continue
 
         ticket['last_notify'] = util.to_string(today)
@@ -82,6 +84,9 @@ def process_ticket_list(tickets):
 
         link = zd.get_zendesk_url() + tickets_url + ticket_id
         ticket_list += body.format(months=month_str, days=day_str, link=link)
+
+    if ticket_list and surpressed > 0:
+        ticket_list += "_Plus " + str(surpressed) + " tickets surpressed._"
 
     return ticket_list
 
