@@ -11,7 +11,6 @@ channels_key = 'conversations.list'
 messages_key = 'chat.postMessage'
 users_key = 'users.list'
 client = None
-channel_id = ''
 
 
 def slack_get(api, after):
@@ -30,9 +29,10 @@ def get_paged(api, func, params):
 
     while True:
         response_json = slack_get(api, cursor)
+        ret = func(response_json, params)
 
-        if func(response_json, params):
-            return True
+        if ret:
+            return ret
 
         if 'response_metadata' in response_json:
             next_cursor = response_json['response_metadata']['next_cursor']
@@ -44,19 +44,15 @@ def get_paged(api, func, params):
 
 
 def check_channels(response_json, channel_name):
-    global channel_id
-
     for channel in response_json['channels']:
         if channel['name'] == channel_name:
-            channel_id = channel['id']
+            return channel['id']
 
-            return True
-
-    return False
+    return None
 
 
-def set_channel(channel_name):
-    get_paged(channels_key, check_channels, channel_name)
+def lookup_channel(channel_name):
+    return get_paged(channels_key, check_channels, channel_name)
 
 
 def add_users(users_json, emails):
@@ -90,7 +86,7 @@ def join():
     )
 
 
-def send_message(message):
+def send_message(message, channel_id):
     global client
 
     client.chat_postMessage(

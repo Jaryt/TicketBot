@@ -45,7 +45,6 @@ def zendesk_get(api):
 def get_zendesk_url():
     return url
 
-
 # Parse ticket data
 def parse_tickets(tickets_json):
     for ticket in tickets_json['tickets']:
@@ -53,7 +52,7 @@ def parse_tickets(tickets_json):
         ticket_id = str(ticket['id'])
         created_at = util.parse_time(ticket['created_at'])
         tickets[ticket_id] = {'assignee_id': assignee_id, 'created_at': created_at, 'comments': {
-            'public': {}, 'private': {}}}
+            'public': {}, 'private': {}}, 'group_id': ticket['group_id']}
         agents = users['agents']
 
         if assignee_id in agents:
@@ -171,16 +170,6 @@ def load_last_replies():
                     else:
                         last[user_type] = {
                             'author_id': commenter, 'comment': commenter_last}
-
-
-# Start of SLA loading,
-def load_sla_policies():
-    sla_json = zendesk_get(policies_hook)
-
-
-def load_ticket_sla():
-    if not sla_policies:
-        load_sla_policies()
 
 
 def get_tickets():

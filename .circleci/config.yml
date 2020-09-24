@@ -6,7 +6,6 @@ orbs:
 
 commands:
     collect-tickets:
-        description: "A very simple command for demonstration purposes"
         parameters:
           view:
             type: string
@@ -19,49 +18,45 @@ commands:
           layover:
             type: integer
             default: 0
+          store:
+            type: string
+            default: "../store.json"
         steps:
           - python/load-cache
           - python/install-deps
           - python/save-cache
+          - aws-s3/copy:
+              from: 's3://circleticketbot/managers.json'
+              to: ../managers.json
+          - aws-s3/copy:
+              from: 's3://circleticketbot/<< parameters.store >>'
+              to: ../<< parameters.store >>
           - run: 
-              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL << parameters.timezone >> << parameters.ping >> << parameters.layover >>
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL << parameters.timezone >> << parameters.ping >> << parameters.layover >> << parameters.store >>
               name: "Run Ticket Collection"
+          - aws-s3/copy:
+              from: ../<< parameters.store >>
+              to: 's3://circleticketbot'
     
 jobs:
-    all:
-        executor: python/default
-        steps:
-          - checkout
-          - collect-tickets:
-                view: "$VIEW_ID_CLOUD"
-                ping: false
-                timezone: false
     support:
         executor: python/default
         steps:
           - checkout
           - collect-tickets:
                 view: "$VIEW_ID_CLOUD"
-    cse:
+    dce:
         executor: python/default
         steps:
           - checkout
-          - aws-s3/copy:
-              from: 's3://circleticketbot/store.json'
-              to: ../store.json
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"
               layover: 5
-          - aws-s3/copy:
-              from: ../store.json
-              to: 's3://circleticketbot'
+              store: "../store_dce.json"
 
 workflows:
     version: 2
 
-    commit: 
-        jobs:
-          - all
     daily:
         triggers:
             - schedule:
@@ -72,4 +67,4 @@ workflows:
                           - master
         jobs: 
           - support
-          - cse
+          - dce
