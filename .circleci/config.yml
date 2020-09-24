@@ -66,7 +66,8 @@ workflows:
     version: 2
 
     default:
-      - all
+      jobs:
+        - all
     daily:
         triggers:
             - schedule:
