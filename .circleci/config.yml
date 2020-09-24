@@ -20,7 +20,7 @@ commands:
             default: 0
           store:
             type: string
-            default: "../store.json"
+            default: "store.json"
         steps:
           - python/load-cache
           - python/install-deps
@@ -60,7 +60,7 @@ jobs:
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"
               layover: 5
-              store: "../store_dce.json"
+              store: "store_dce.json"
 
 workflows:
     version: 2
