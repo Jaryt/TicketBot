@@ -39,6 +39,14 @@ commands:
               to: 's3://circleticketbot'
     
 jobs:
+    all:
+      executor: python/default
+      steps:
+        - checkout
+        - collect-tickets:
+              view: "$VIEW_ID_CLOUD"
+              ping: false
+              timezone: false
     support:
         executor: python/default
         steps:
@@ -57,6 +65,8 @@ jobs:
 workflows:
     version: 2
 
+    default:
+      - all
     daily:
         triggers:
             - schedule:

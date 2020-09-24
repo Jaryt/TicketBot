@@ -59,8 +59,6 @@ def multi(single, val):
     return str(val) + (single + 's' if val != 1 else single)
 
 # process output for an agent's list of tickets
-
-
 def process_ticket_list(tickets, manager_lists):
     global group_managers
     ticket_list = ""
