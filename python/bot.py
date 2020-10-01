@@ -246,10 +246,10 @@ def loop():
 
     slack.join()
 
-    send_to = channel
+    destination = channel
 
     if not manager_run:
-      send_to = slack.lookup_channel(channel)
+      destination = slack.lookup_channel(channel)
 
     extra_data = slack.lookup_emails(get_emails(users))
     agent_tickets = get_agent_tickets(tickets)
@@ -259,8 +259,7 @@ def loop():
     if tickets:
         result = process_tickets(agent_tickets, users['agents'], extra_data)
 
-        print(result)
-        # slack.send_message(result)
+        slack.send_message(result, destination)
 
     if not manager_run:
       with open(store_loc, 'w+') as f:
