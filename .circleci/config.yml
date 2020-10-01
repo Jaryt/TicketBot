@@ -75,31 +75,48 @@ jobs:
           - checkout
           - collect-tickets:
               view: "$VIEW_ID_CLOUD"
-              channel: "US57UDJJY"
+              channel: "U7PE4NR5L"
               timezone: false
               is_manager: true
               group_id: 43783767
-              notify_after_days: 0
+              notify_after_days: 2
     dce_manager:
         executor: python/default
         steps:
           - checkout
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"
-              channel: "US57UDJJY"
+              channel: "UH5A73ZD4"
               layover: 5
               timezone: false
               store: "store_dce.json"
               is_manager: true
               group_id: 43783767
-              notify_after_days: 0
+              notify_after_days: 2
 
 workflows:
     version: 2
 
-    default:
+    support_manager:
       jobs:
         - support_manager
+      triggers:
+        - schedule:
+            cron: "0 12 * * *"
+            filters:
+                branches:
+                    only:
+                      - master
+    dce_manager:
+      jobs:
+        - dce_manager
+      triggers:
+        - schedule:
+            cron: "0 9 * * *"
+            filters:
+                branches:
+                    only:
+                      - master
     daily:
         triggers:
             - schedule:
