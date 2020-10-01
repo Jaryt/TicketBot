@@ -9,6 +9,9 @@ commands:
         parameters:
           view:
             type: string
+          channel:
+            type: string
+            default: "$SLACK_CHANNEL"
           timezone:
             type: boolean
             default: true
@@ -21,18 +24,24 @@ commands:
           store:
             type: string
             default: "store.json"
+          is_manager: 
+            type: boolean
+            default: false
+          group_id: 
+            type: integer
+            default: 0
+          notify_after_days: 
+            type: integer
+            default: 0
         steps:
           - python/load-cache
           - python/install-deps
           - python/save-cache
           - aws-s3/copy:
-              from: 's3://circleticketbot/managers.json'
-              to: ../managers.json
-          - aws-s3/copy:
               from: 's3://circleticketbot/<< parameters.store >>'
               to: ../<< parameters.store >>
           - run: 
-              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> $SLACK_CHANNEL << parameters.timezone >> << parameters.ping >> << parameters.layover >> << parameters.store >>
+              command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> << parameters.channel >> << parameters.timezone >> << parameters.ping >> << parameters.layover >> << parameters.store >> << parameters.is_manager >> << parameters.group_id >> << parameters.notify_after_days >>
               name: "Run Ticket Collection"
           - aws-s3/copy:
               from: ../<< parameters.store >>
@@ -61,13 +70,37 @@ jobs:
               view: "$VIEW_ID_PREMIUM"
               layover: 5
               store: "store_dce.json"
+    support_manager:
+        executor: python/default
+        steps:
+          - checkout
+          - collect-tickets:
+              view: "$VIEW_ID_PREMIUM"
+              channel: "US57UDJJY"
+              layover: 5
+              store: "store_dce.json"
+              is_manager: true
+              group_id: 43783767
+              notify_after_days: 0
+    dce_manager:
+        executor: python/default
+        steps:
+          - checkout
+          - collect-tickets:
+              view: "$VIEW_ID_PREMIUM"
+              channel: "US57UDJJY"
+              layover: 5
+              store: "store_dce.json"
+              is_manager: true
+              group_id: 43783767
+              notify_after_days: 0
 
 workflows:
     version: 2
 
     default:
       jobs:
-        - all
+        - support_manager
     daily:
         triggers:
             - schedule:

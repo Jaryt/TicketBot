@@ -22,19 +22,22 @@ min_days = 5  # Min days since we reply to trigger log
 default_offset = -28800  # PST offset in seconds from UTC
 check_tz = False
 ping = True
+manager_run = False
 layover_days = 0
 weekday = False
 today = None
 store_loc = ''
+group_id = None
+notify_after_days = 2
 
 tickets_url = "/agent/tickets/"
 managers_loc = "../managers.json"
-group_managers = {}
 
 def setup(argv):
     global user, domain, view, channel
     global check_tz, ping, layover_days
-    global today, weekday, store_loc, group_managers
+    global today, weekday, store_loc, manager_run
+    global group_id, notify_after_days
 
     user = argv[1]
     domain = argv[2]
@@ -44,14 +47,15 @@ def setup(argv):
     ping = argv[6].lower() == 'true'
     layover_days = int(argv[7])
     store_loc = argv[8]
+    manager_run = argv[9].lower() == 'true'
+
+    if manager_run:
+      group_id = argv[10]
+      notify_after_days = int(argv[11])
+
     today = datetime.today()
     weekday = datetime.now().weekday() < 5
 
-    with open(managers_loc) as f:
-        group_managers = json.load(f)
-        f.close()
-
-    print(json.dumps(group_managers, indent=4, sort_keys=True, default=str))
 
 
 # grammatical function
@@ -59,8 +63,7 @@ def multi(single, val):
     return str(val) + (single + 's' if val != 1 else single)
 
 # process output for an agent's list of tickets
-def process_ticket_list(tickets, manager_lists):
-    global group_managers
+def process_ticket_list(tickets):
     ticket_list = ""
     body = '{months}{days} since we replied to `{link}`\n'
     surpressed = 0
@@ -81,44 +84,40 @@ def process_ticket_list(tickets, manager_lists):
                 day_str = " and "
             day_str += multi(" day", days)
 
-        if str(ticket['group_id']) in group_managers:
+        if manager_run and str(ticket['group_id']) == group_id:
             manager_body = '{months}{days} since we replied to `{link}`. *Assignee was first notified {first_days} ago*\n'
-            manager = group_managers[str(ticket['group_id'])]
 
             if 'first_notify' in ticket:
                 first_notify = util.parse_time(ticket['first_notify'])
                 diff = relativedelta(today, first_notify)
                 first_day_str = multi(" day", diff.days)
 
-                if diff.days >= manager['notify_after_days'] or diff.months > 0:
+                if diff.days >= notify_after_days or diff.months > 0:
                     link = zd.get_zendesk_url() + tickets_url + ticket_id
                     message = manager_body.format(months=month_str, days=day_str, link=link, first_days=first_day_str)
-                    manager_id = manager['user_id']
 
-                    if manager_id in manager_lists:
-                      manager_lists[manager_id] += message
-                    else:
-                      manager_lists[manager_id] = 'Tickets that need updating for ' + manager['group_name'] + '\n' + message
-            else:
-                ticket['first_notify'] = util.to_string(today)
+                    ticket_list += message
+        else:
+          if layover_days > 0 and 'last_notify' in ticket:
+              last_notify = util.parse_time(ticket['last_notify'])
+              diff = relativedelta(today, last_notify)
 
-        if layover_days > 0 and 'last_notify' in ticket:
-            last_notify = util.parse_time(ticket['last_notify'])
-            diff = relativedelta(today, last_notify)
+              if diff.days < layover_days and diff.months == 0:
+                  surpressed += 1
+                  continue
 
-            if diff.days < layover_days and diff.months == 0:
-                surpressed += 1
-                continue
+          if not 'first_notify' in ticket:
+            ticket['first_notify'] = util.to_string(today)
 
-        ticket['last_notify'] = util.to_string(today)
+          ticket['last_notify'] = util.to_string(today)
 
-        link = zd.get_zendesk_url() + tickets_url + ticket_id
-        ticket_list += body.format(months=month_str, days=day_str, link=link)
+          link = zd.get_zendesk_url() + tickets_url + ticket_id
+          ticket_list += body.format(months=month_str, days=day_str, link=link)
 
     if ticket_list and surpressed > 0:
-        ticket_list += "_Plus " + str(surpressed) + " tickets surpressed._"
+        ticket_list += "_Plus " + str(surpressed) + " tickets surpressed._\n"
 
-    return ticket_list, manager_lists
+    return ticket_list
 
 
 def check_timezone(tz_offset):
@@ -130,7 +129,6 @@ def check_timezone(tz_offset):
 # Get ticket data and print it out
 def process_tickets(agent_tickets, agents, extra_data):
     out = ""
-    manager_lists = {}
 
     for agent_id in agent_tickets:
         if agent_id == 'None':
@@ -155,12 +153,12 @@ def process_tickets(agent_tickets, agents, extra_data):
                     tz_offset = data['tz_offset']
 
         if check_timezone(tz_offset) or not check_tz:
-            ticket_list, manager_lists = process_ticket_list(agent_tickets[agent_id], manager_lists)
+            ticket_list = process_ticket_list(agent_tickets[agent_id])
 
             if ticket_list:
                 out += header.format(name=name, tickets=ticket_list)
 
-    return out, manager_lists
+    return out
 
 
 def get_agent_tickets(tickets):
@@ -236,6 +234,7 @@ def get_emails(users):
 
 # Run ticket collection and process loop
 def loop():
+
     zd.set_credentials(user, domain)
     zd.load_tickets_view(view)
     zd.load_ticket_replies()
@@ -246,7 +245,11 @@ def loop():
     users = zd.get_users()
 
     slack.join()
-    alerts_channel = slack.lookup_channel(channel)
+
+    send_to = channel
+
+    if not manager_run:
+      send_to = slack.lookup_channel(channel)
 
     extra_data = slack.lookup_emails(get_emails(users))
     agent_tickets = get_agent_tickets(tickets)
@@ -254,20 +257,19 @@ def loop():
     result = None
 
     if tickets:
-        result, manager_lists = process_tickets(agent_tickets, users['agents'], extra_data)
+        result = process_tickets(agent_tickets, users['agents'], extra_data)
 
-        for manager_id in manager_lists:
-          slack.send_message(manager_lists[manager_id], manager_id)
+        print(result)
+        # slack.send_message(result)
 
-        if result:
-            pass
-            # slack.send_message(result)
-
-    with open(store_loc, 'w+') as f:
-        f.write(json.dumps(agent_tickets, indent=4, default=str))
-        f.close()
+    if not manager_run:
+      with open(store_loc, 'w+') as f:
+          f.write(json.dumps(agent_tickets, indent=4, default=str))
+          f.close()
 
 
 if __name__ == '__main__':
     setup(sys.argv)
     loop()
+
+# python3 bot.py $ZENDESK_LOGIN jaryt@circleci.com circleci 328064508 custeng-support-alerts false true 3 ../store.json
