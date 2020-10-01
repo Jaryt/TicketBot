@@ -75,10 +75,8 @@ jobs:
         steps:
           - checkout
           - collect-tickets:
-              view: "$VIEW_ID_PREMIUM"
+              view: "$VIEW_ID_CLOUD"
               channel: "US57UDJJY"
-              layover: 5
-              store: "store_dce.json"
               is_manager: true
               group_id: 43783767
               notify_after_days: 0
