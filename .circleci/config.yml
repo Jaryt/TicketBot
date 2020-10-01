@@ -102,7 +102,7 @@ workflows:
         - support_manager
       triggers:
         - schedule:
-            cron: "0 12 * * *"
+            cron: "0 16 * * *"
             filters:
                 branches:
                     only:
@@ -112,7 +112,7 @@ workflows:
         - dce_manager
       triggers:
         - schedule:
-            cron: "0 9 * * *"
+            cron: "0 13 * * *"
             filters:
                 branches:
                     only:
