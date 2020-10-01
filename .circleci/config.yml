@@ -37,16 +37,15 @@ commands:
           - python/load-cache
           - python/install-deps
           - aws-s3/copy:
-            from: 's3://circleticketbot/<< parameters.store >>'
-            to: ../<< parameters.store >>
-            - run: 
+              from: 's3://circleticketbot/<< parameters.store >>'
+              to: ../<< parameters.store >>
+          - run: 
               command: python3 python/bot.py $ZENDESK_LOGIN $ZENDESK_URL << parameters.view >> << parameters.channel >> << parameters.timezone >> << parameters.ping >> << parameters.layover >> << parameters.store >> << parameters.is_manager >> << parameters.group_id >> << parameters.notify_after_days >>
               name: "Run Ticket Collection"
-              - aws-s3/copy:
-                from: ../<< parameters.store >>
-                to: 's3://circleticketbot'
+          - aws-s3/copy:
+              from: ../<< parameters.store >>
+              to: 's3://circleticketbot'
           - python/save-cache
-    
 jobs:
     all:
       executor: python/default
@@ -88,8 +87,8 @@ jobs:
           - collect-tickets:
               view: "$VIEW_ID_PREMIUM"
               channel: "US57UDJJY"
-              timezone: false
               layover: 5
+              timezone: false
               store: "store_dce.json"
               is_manager: true
               group_id: 43783767
