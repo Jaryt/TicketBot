@@ -91,7 +91,7 @@ jobs:
               timezone: false
               store: "store_dce.json"
               is_manager: true
-              group_id: 43783767
+              group_id: 43467408
               notify_after_days: 2
 
 workflows:
