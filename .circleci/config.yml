@@ -75,7 +75,7 @@ jobs:
           - checkout
           - collect-tickets:
               view: "$VIEW_ID_CLOUD"
-              channel: "U7PE4NR5L"
+              channel: "U01FB8Y1XTJ"
               timezone: false
               is_manager: true
               group_id: 43783767
